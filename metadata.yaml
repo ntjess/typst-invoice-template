@@ -1,0 +1,43 @@
+invoice-id: CXX-XXX
+date: 2023-09-01
+
+locale:
+  currency: "$"
+  separator: ","
+
+preparer-info:
+  company-name: Company, LLC
+  address: 123 Main St., City, State 12345
+  name: First Last
+  email: email@company.com
+  phone: 555-555-5555
+
+client-info:
+  company-name: Client, Inc.
+  address: 123 Main St., City, State 12345
+  name: First Last
+  email: name@client.com
+  phone: 555-555-5555
+
+payment-info:
+  payment-window: 7 calendar days
+  account-details: |
+    Payable by ACH transfer to Account Name
+    Banking Institution
+    Account #: 1234567890
+    Routing #: 123456789
+
+# itemized-charges:
+#   - date: September 1-30
+#     description: Website Design
+#     price: 12500
+#   - date: September 15
+#     description: Servers
+#     price: 500
+#     quantity: 3
+
+hourly-charges:
+  - date: September 2023
+    description: Services rendered
+    hours: 100
+    rate: 100
