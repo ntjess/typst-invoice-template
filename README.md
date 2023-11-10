@@ -11,14 +11,14 @@ All required information can be changed in the sample [metadata.yaml](metadata.y
 Simply change the default `locale` options in your metadata, or update the respective template states before rendering.
 
 ### Billing options:
-- `itemized-bill`: Non-hourly charges that can optionally leave out a quantity such as milestone deliverables (e.g., "Website design").
-  - If any list item specifies a quantity, the price is multiplied appropriately to generate a total.
-- `hourly-bill`: Simply multiplies the hourly rate by the number of hours worked to generate a total.
-- If both hourly and itemized options are specified, a heading is added to each table of charges to distinguish them.
-
+- Any metadata key ending in "charges" (case insensitive) will be rendered as shown in the example.
+- If multiple "charges" are present, a heading is added to each table to distinguish them.
 
 ### Custom styling
 Pass `use-default-style: false` to the invoice function to prevent the default font, paper size, and link styling.
 
+Replace `logo.svg` with your own logo to change the default, or comment it out in `template.typ` to remove it entirely.
+  - When typst allows checking for file existence, the logo will be removed automatically if it is not present.
+
 ## Roadmap
-I'm not sure how to best handle taxes, so I'm open to suggestions if this applies to you.
+Feedback from the community is welcome! No additional features are currently planned other than bugfixes.

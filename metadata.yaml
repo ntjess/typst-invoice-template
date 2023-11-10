@@ -6,6 +6,7 @@ doc-info:
 locale:
   currency: "$"
   separator: ","
+  decimal: "."
 
 preparer-info:
   company-name: Company, LLC
@@ -34,7 +35,6 @@ charge-info:
     type: currency
   quantity: &quantity
     type: number
-    default: 1
   qty: *quantity # alias
   rate:
     type: currency
@@ -46,20 +46,30 @@ charge-info:
     width: 1fr
   tax:
     type: percent
-  total:
-    type: currency
+    suffix: "%"
+  discount:
+    type: percent
+    negative: true
+    suffix: "%"
+  "#":
+    type: index
+    default: ""
 
-# Itemized Charges::
-#   - date: September 1-30
-#     description: Website Design
-#     price: 12500
-#   - date: September 15
-#     description: Servers
-#     price: 500
-#     quantity: 3
-
-Hourly Charges:
-  - date: September 2023
-    description: Services rendered
-    hours: 100
-    rate: 100
+Itemized Charges:
+  - "#": 1
+    date: September 1-30
+    description: Website Design
+    price: 12500
+  - date: September 15
+    description: Hardware
+    price: 500
+    quantity: 3
+    tax: 7.025
+  - date: September 15
+    description: Voucher
+    price: -100
+# Hourly Charges:
+#   - date: September 2023
+#     description: Services rendered
+#     hours: 100
+#     rate: 100

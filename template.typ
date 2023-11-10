@@ -2,6 +2,7 @@
 
 #let default-currency = state("currency-state", "$")
 #let default-hundreds-separator = state("separator-state", ",")
+#let default-decimal = state("decimal-state", ".")
 
 #let date-to-str(date, format: "[day padding:none] [month repr:long] [year]") = {
   if type(date) == "string" {
@@ -78,26 +79,41 @@
   ]
 }
 
-#let price-formatter(number, currency: auto, separator: auto) ={
+#let price-formatter(number, currency: auto, separator: auto, decimal: auto, digits: 2) ={
   // Adds commas after each 3 digits to make
   // pricing more readable
+  let number = calc.round(number, digits: digits)
   if currency == auto {
     currency = default-currency.display()
   }
   if separator == auto {
     separator = default-hundreds-separator.display()
   }
+  if decimal == auto {
+    decimal = default-decimal.display()
+  }
 
-  let num = str(number)
-  let num-length = num.len()
+  let integer-portion = str(int(calc.abs(number)))
+  let num-length = integer-portion.len()
   let num-with-commas = ""
+
   for ii in range(num-length) {
     if calc.rem(ii, 3) == 0 and ii > 0 {
       num-with-commas = separator + num-with-commas
     }
-    num-with-commas = num.at(-ii - 1) + num-with-commas
+    num-with-commas = integer-portion.at(-ii - 1) + num-with-commas
   }
-  currency + num-with-commas
+  let fraction = int(calc.pow(10, digits) * calc.abs(number - int(number)))
+  if fraction == 0 {
+    fraction = ""
+  } else {
+    fraction = decimal + str(fraction)
+  }
+  let formatted = currency + num-with-commas + fraction
+  if number < 0 {
+    formatted = "(" + formatted + ")"
+  }
+  formatted
 }
 
 #let c(body, ..args) = cellx(inset: 1.25em, ..args, text(weight: "bold", body))
@@ -118,10 +134,22 @@
 
 #let _format-charge-value(value, info, row-total, row-number) = {
   // TODO: Account for other helpful types like datetime
+  if value == none {
+    return (value, row-total, false)
+  }
   let typ = info.at("type")
   let did-multiply = false
   if typ not in ("string", "index") {
-    let multiplier = if typ == "percent" {1 + value} else {value}
+    let multiplier = value
+    if info.at("negative", default: false) {
+      multiplier *= -1
+    }
+    if typ == "percent" {
+      multiplier = 1 + multiplier/100
+    }
+    if row-total == none {
+      row-total = 1
+    }
     row-total *= multiplier
     did-multiply = true
   }
@@ -129,14 +157,14 @@
   if typ == "currency" {
     out-value = price-formatter(value)
   } else if typ == "percent" {
-    out-value = str(int(value * 100)) + "%"
+    out-value = value
   } else if typ == "string" {
     out-value = eval(value, mode: "markup")
   } else if typ == "index" and value == "" {
     out-value = row-number
   }
   if "suffix" in info {
-    out-value += info.at("suffix")
+    out-value = [#out-value#info.at("suffix")]
   }
   (out-value, row-total, did-multiply)
 }
@@ -165,11 +193,6 @@
 }
 
 #let bill-table(..items, charge-info: auto) = {
-  let defaults = yaml("./metadata.yaml").at("charge-info")
-  if charge-info == auto {
-    charge-info = (:)
-  }
-  charge-info = defaults + charge-info
   if items.pos().len() == 0 {
     return (table: none, amount: 0)
   }
@@ -180,37 +203,40 @@
   let has-multiplier = false
   let found-infos = (:)
 
+  // Initial scan finds all possible fields, and whether a "total"
+  // field is needed
   for item in items.pos() {
+    let mult-count = 0
     for (key, value) in item.pairs() {
       if key not in charge-info {
         let fallback = (type: type(value))
         charge-info.insert(key, fallback)
       }
       found-infos.insert(key, charge-info.at(key))
+      let (_, _, did-multiply) = _format-charge-value(value, charge-info.at(key), 0, 0)
+      if did-multiply {
+        mult-count += 1
+      }
+      has-multiplier = has-multiplier or mult-count > 1
     }
   }
 
   // Now that all needed keys are guaranteed to exist, we can start to format output values
   for (ii, item) in items.pos().enumerate() {
     let row-number = ii + 1
-    let row-total = 1
-    let mult-count = 0
+    let row-total = none
     for (key, info) in found-infos.pairs() {
       let default-value = info.at("default", default: none)
       let value = item.at(key, default: default-value)
-      if value == none {
-        panic(
-          "item `" + repr(item) + "` must have a value for key `" + key
-          + "` or a default must be present in `charge-info`"
-        )
-      }
-      let (display-value, new-row-total, did-multiply) = _format-charge-value(value, info, row-total, row-number)
-      if did-multiply {
-        mult-count += 1
-      }
+      let (display-value, new-row-total, _) = _format-charge-value(
+        value, info, row-total, row-number
+      )
+      
       out.push(display-value)
       row-total = new-row-total
-      has-multiplier = has-multiplier or mult-count > 1
+    }
+    if row-total == none {
+      row-total = 0
     }
     if has-multiplier {
       out.push(price-formatter(row-total))
@@ -271,6 +297,9 @@
   }
   if "separator" in price-locale {
     default-hundreds-separator.update(price-locale.at("separator"))
+  }
+  if "decimal" in price-locale {
+    default-decimal.update(price-locale.at("decimal"))
   }
 
   let needs-heading = headings-and-charges.len() > 1
