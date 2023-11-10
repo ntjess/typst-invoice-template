@@ -1,5 +1,7 @@
-invoice-id: CXX-XXX
-date: 2023-09-01
+doc-info:
+  id: CXX-XXX
+  date: 2023-09-01
+  title: INVOICE
 
 locale:
   currency: "$"
@@ -27,7 +29,27 @@ payment-info:
     Account #: 1234567890
     Routing #: 123456789
 
-# itemized-charges:
+charge-info:
+  price:
+    type: currency
+  quantity: &quantity
+    type: number
+    default: 1
+  qty: *quantity # alias
+  rate:
+    type: currency
+    suffix: /hr
+  hours:
+    type: number
+  description:
+    type: string
+    width: 1fr
+  tax:
+    type: percent
+  total:
+    type: currency
+
+# Itemized Charges::
 #   - date: September 1-30
 #     description: Website Design
 #     price: 12500
@@ -36,7 +58,7 @@ payment-info:
 #     price: 500
 #     quantity: 3
 
-hourly-charges:
+Hourly Charges:
   - date: September 2023
     description: Services rendered
     hours: 100

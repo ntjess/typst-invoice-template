@@ -24,49 +24,51 @@
   }
 }
 
-#let parse-frontmatter(preparer-info, client-info, date, invoice-id) = {
-  for dict in (preparer-info, client-info) {
-    check-dict-keys(dict, "company-name", "address", "name", "email", "phone")
-  }
+#let format-company-info(info, title: none) = [
+  #check-dict-keys(info, "company-name", "address", "name", "email", "phone")
+  #title\
+  #info.company-name\
+  #info.address
 
-  let banner = {
-    text(size: 3em, weight: "extrabold")[INVOICE]
-  }
+  Attn: #info.name\
+  #link("mailto:" + info.email)\
+  #info.phone
+]
 
-  let margin = 0.8in
-  [
-    #banner
+#let format-doc-info(info) = [
+  #check-dict-keys(info, "title", "id", "date")
 
-    Invoice ID: #invoice-id\
-    Date: #date-to-str(date)
-
-    #v(3em)
-
-    #grid(columns: 2, column-gutter: 1fr)[
-      BILL TO:
-
-      *#client-info.company-name*\
-      #client-info.address
-
-      Attn: #client-info.name\
-      #link("mailto:" + client-info.email)\
-      #client-info.phone
-    ][
-      FROM:
-
-      *#preparer-info.company-name*\
-      #preparer-info.address
-
-      Attn: #preparer-info.name\
-      #link("mailto:" + preparer-info.email)\
-      #preparer-info.phone
-    ]
-
-    #v(3em)
+  #text(size: 2.75em, weight: "extrabold")[#info.title]
+  #v(-2em)
+  ID: #info.id\
+  Date: #date-to-str(info.date)
+  #if "valid-through" in info [
+    #linebreak()
+    Valid through #date-to-str(info.valid-through)
   ]
-}
+]
 
-#let parse-payment-info(payment-info) = {
+#let format-frontmatter(preparer-info, client-info, doc-info) = [
+  #grid(columns: 2, column-gutter: 1fr)[
+    #format-doc-info(doc-info)
+  ][
+    #set align(bottom)
+    #image("logo.svg", height: 5em)
+  ]
+  #line(length: 100%)
+  #v(1em)
+
+
+  #grid(columns: 2, column-gutter: 1fr)[
+    #format-company-info(client-info, title: [*TO:*])
+  ][
+    #format-company-info(preparer-info, title: [*FROM:*])
+  ]
+
+  #v(1em)
+]
+
+#let format-payment-info(payment-info) = {
   check-dict-keys(payment-info, "payment-window", "account-details")
   [
     #v(1em)
@@ -113,130 +115,130 @@
   ]
 }
 
-#let itemized-bill-quantities(..items) = {
-  let out = ()
-  let total-amount = 0
-  for item in items.pos() {
-    let price = item.at("price")
-    let quantity = item.at("quantity")
-    let total = none
-    if quantity != none {
-      total = quantity * price
-      price = price-formatter(price)
-    } else {
-      (total, price) = (price, none)
+
+#let _format-charge-value(value, info, row-total, row-number) = {
+  // TODO: Account for other helpful types like datetime
+  let typ = info.at("type")
+  let did-multiply = false
+  if typ not in ("string", "index") {
+    let multiplier = if typ == "percent" {1 + value} else {value}
+    row-total *= multiplier
+    did-multiply = true
+  }
+  let out-value = value
+  if typ == "currency" {
+    out-value = price-formatter(value)
+  } else if typ == "percent" {
+    out-value = str(int(value * 100)) + "%"
+  } else if typ == "string" {
+    out-value = eval(value, mode: "markup")
+  } else if typ == "index" and value == "" {
+    out-value = row-number
+  }
+  if "suffix" in info {
+    out-value += info.at("suffix")
+  }
+  (out-value, row-total, did-multiply)
+}
+
+#let _format-charge-columns(charge-info) = {
+  let get-eval(dict, key, default) = {
+    let value = dict.at(key, default: default)
+    if type(value) == "string" {
+      eval(value)
     }
-    total-amount += total
-    out.push(item.at("date"))
-    out.push(item.at("description"))
-    out.push(quantity)
-    out.push(price)
-    out.push(price-formatter(total))
+    else {
+      value
+    }
   }
-  let tbl = tablex(
-    columns: (auto, 1fr, auto, auto, auto),
-    align: (auto, auto, right, right, right),
-    auto-vlines: false,
-    inset: 1em,
-    c[Date],
-    c[Description],
-    c[Qty],
-    c[Price],
-    c[Total],
-    ..out,
-  )
-  (table: tbl, amount: total-amount)
+
+  let (names, aligns, widths) = ((), (), ())
+  for (key, info) in charge-info.pairs() {
+    key = upper(key.at(0)) + key.slice(1)
+    names.push(c(key))
+    let default-align = if info.at("type") == "string" { left } else { right }
+    aligns.push(get-eval(info, "align", default-align))
+    widths.push(get-eval(info, "width", auto))
+  }
+  // Keys correspodn to tablex specs other than "names" which is positional
+  (names: names, align: aligns, columns: widths)
 }
 
-#let itemized-bill-simple(..items) = {
-  let out = ()
-  let total-amount = 0
-  for item in items.pos() {
-    let price = item.at("price")
-    total-amount += price
-    out.push(item.at("date"))
-    out.push(item.at("description"))
-    out.push(price-formatter(price))
+#let bill-table(..items, charge-info: auto) = {
+  let defaults = yaml("./metadata.yaml").at("charge-info")
+  if charge-info == auto {
+    charge-info = (:)
   }
-  let tbl = tablex(
-    columns: (auto, 1fr, auto),
-    align: (auto, auto, right),
-    auto-vlines: false,
-    inset: 1em,
-    c[Date],
-    c[Description],
-    c[Price],
-    ..out,
-  )
-  (table: tbl, amount: total-amount)
-}
-
-#let itemized-bill(..items) = {
-  items = items.pos()
-  if items.len() == 0 {
-    return (table: none, amount: 0)
-  }
-
-  if items.filter(item => "quantity" in item).len() > 0 {
-    // Use an explicit quantity bill
-    items = items.map(item => {
-      if "quantity" in item {
-        item
-      } else {
-        item + (quantity: none)
-      }
-    })
-    return itemized-bill-quantities(..items)
-  } else {
-    return itemized-bill-simple(..items)
-  }
-}
-
-#let hourly-bill(..items) = {
+  charge-info = defaults + charge-info
   if items.pos().len() == 0 {
     return (table: none, amount: 0)
   }
   let out = ()
   let total-amount = 0
+  let columns = ()
+  // A separate "Total" column is only needed if there are >1 multipliers
+  let has-multiplier = false
+  let found-infos = (:)
+
   for item in items.pos() {
-    let (date, description, hours, rate) = (
-      item.at("date"),
-      item.at("description"),
-      item.at("hours"),
-      item.at("rate"),
-    )
-    let amount = hours * rate
-    total-amount = total-amount + amount
-    out += (
-      date,
-      description,
-      hours,
-      price-formatter(rate) + "/hr",
-      price-formatter(amount),
-    )
+    for (key, value) in item.pairs() {
+      if key not in charge-info {
+        let fallback = (type: type(value))
+        charge-info.insert(key, fallback)
+      }
+      found-infos.insert(key, charge-info.at(key))
+    }
   }
+
+  // Now that all needed keys are guaranteed to exist, we can start to format output values
+  for (ii, item) in items.pos().enumerate() {
+    let row-number = ii + 1
+    let row-total = 1
+    let mult-count = 0
+    for (key, info) in found-infos.pairs() {
+      let default-value = info.at("default", default: none)
+      let value = item.at(key, default: default-value)
+      if value == none {
+        panic(
+          "item `" + repr(item) + "` must have a value for key `" + key
+          + "` or a default must be present in `charge-info`"
+        )
+      }
+      let (display-value, new-row-total, did-multiply) = _format-charge-value(value, info, row-total, row-number)
+      if did-multiply {
+        mult-count += 1
+      }
+      out.push(display-value)
+      row-total = new-row-total
+      has-multiplier = has-multiplier or mult-count > 1
+    }
+    if has-multiplier {
+      out.push(price-formatter(row-total))
+    }
+    total-amount += row-total
+  }
+  if has-multiplier {
+    found-infos.insert("total", (type: "currency"))
+  }
+  let col-spec = _format-charge-columns(found-infos)
+  let names = col-spec.remove("names")
   let tbl = tablex(
-    columns: (auto, 1fr, auto, auto, auto),
-    align: (auto, auto, right, right, right),
+    ..col-spec,
     auto-vlines: false,
     inset: 1em,
-    c[Date],
-    c[Description],
-    c[Hours],
-    c[Rate],
-    c[Total],
+    ..names,
     ..out,
   )
   (table: tbl, amount: total-amount)
 }
+
 
 #let invoice(
   body,
   preparer-info: none,
   client-info: none,
   payment-info: none,
-  date: none,
-  invoice-id: none,
+  doc-info: none,
   apply-default-style: true,
 ) = {
   set text(font: "Arial", hyphenate: false) if apply-default-style
@@ -252,23 +254,18 @@
     }
   }
 
-  let frontmatter = parse-frontmatter(preparer-info, client-info, date, invoice-id)
+  let frontmatter = format-frontmatter(preparer-info, client-info, doc-info)
 
 
   frontmatter
 
-  show heading.where(level: 1): set text(size: 1.25em)
-  show heading.where(level: 2): set text(size: 1.1em)
-  show heading.where(level: 3): content => {
-    [#content.body:]
-  }
-
   body
-
-  parse-payment-info(payment-info)
+  if payment-info != none {
+    format-payment-info(payment-info)
+  }
 }
 
-#let create-bill-tables(itemized-charges: (), hourly-charges: (), price-locale: (:)) = {
+#let create-bill-tables(headings-and-charges, charge-info: auto, price-locale: (:)) = {
   if "currency" in price-locale {
     default-currency.update(price-locale.at("currency"))
   }
@@ -276,26 +273,22 @@
     default-hundreds-separator.update(price-locale.at("separator"))
   }
 
-  let (itemized, hourly) = (
-    itemized-bill(..itemized-charges),
-    hourly-bill(..hourly-charges),
-  )
-  let needs-heading = itemized-charges.len() > 0 and hourly-charges.len() > 0
+  let needs-heading = headings-and-charges.len() > 1
+  let running-total = 0
 
-  if needs-heading {
-      [== Itemized Charges]
-  }
-  itemized.table
+  for (key, charge-list) in headings-and-charges.pairs() {
+    if needs-heading {
+      [= #key]
+    }
+    let bill = bill-table(..charge-list, charge-info: charge-info)
+    bill.table
+    running-total += bill.amount
 
-  if needs-heading {
-      v(1em)
-      [== Hourly Charges]
   }
-  hourly.table
 
   h(1fr)
   set align(right) if not needs-heading
-  total-bill(itemized.at("amount") + hourly.at("amount"))
+  total-bill(running-total)
 }
 
 #let remove-or-default(dict, key, default) = {
@@ -310,13 +303,22 @@
 }
 
 #let invoice-from-metadata(metadata-dict, pre-table-body: [], ..extra-invoice-args) = {
-  let (meta, itemized) = remove-or-default(metadata-dict, "itemized-charges", ())
-  let (meta, hourly) = remove-or-default(meta, "hourly-charges", ())
+  let meta = metadata-dict
+  let charges = (:)
+  for key in meta.keys() {
+    if lower(key).ends-with("charges") {
+      let opts = meta.remove(key)
+      charges.insert(key, opts)
+    }
+  }
+
+
+  let (meta, info) = remove-or-default(meta, "charge-info", auto)
   let (meta, price-locale) = remove-or-default(meta, "locale", ())
 
   show: invoice.with(..meta, ..extra-invoice-args)
 
   pre-table-body
 
-  create-bill-tables(itemized-charges: itemized, hourly-charges: hourly, price-locale: price-locale)
+  create-bill-tables(charges, charge-info: info, price-locale: price-locale)
 }
