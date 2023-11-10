@@ -82,7 +82,6 @@
 #let price-formatter(number, currency: auto, separator: auto, decimal: auto, digits: 2) ={
   // Adds commas after each 3 digits to make
   // pricing more readable
-  let number = calc.round(number, digits: digits)
   if currency == auto {
     currency = default-currency.display()
   }
@@ -93,7 +92,7 @@
     decimal = default-decimal.display()
   }
 
-  let integer-portion = str(int(calc.abs(number)))
+  let integer-portion = str(calc.abs(calc.trunc(number)))
   let num-length = integer-portion.len()
   let num-with-commas = ""
 
@@ -103,13 +102,15 @@
     }
     num-with-commas = integer-portion.at(-ii - 1) + num-with-commas
   }
-  let fraction = int(calc.pow(10, digits) * calc.abs(number - int(number)))
-  if fraction == 0 {
-    fraction = ""
+  // Another "round" is needed to offset float imprecision
+  let fraction = calc.round(calc.fract(number), digits: digits + 1)
+  let fraction-int = calc.round(fraction * calc.pow(10, digits))
+  if fraction-int == 0 {
+    fraction-int = ""
   } else {
-    fraction = decimal + str(fraction)
+    fraction-int = decimal + str(fraction-int)
   }
-  let formatted = currency + num-with-commas + fraction
+  let formatted = currency + num-with-commas + fraction-int
   if number < 0 {
     formatted = "(" + formatted + ")"
   }
