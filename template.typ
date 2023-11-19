@@ -54,7 +54,7 @@
     #format-doc-info(doc-info)
   ][
     #set align(bottom)
-    #image("logo.svg", height: 5em)
+    #doc-info.at("logo", default: none)
   ]
   #line(length: 100%)
   #v(1em)
@@ -194,6 +194,9 @@
 }
 
 #let bill-table(..items, charge-info: auto) = {
+  if charge-info == auto {
+    charge-info = (:)
+  }
   if items.pos().len() == 0 {
     return (table: none, amount: 0)
   }
